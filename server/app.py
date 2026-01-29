@@ -18,11 +18,12 @@ from server.schemas import (
     TeamJoinRequest,
     TeamResponse,
     MemberResponse,
+    TeamUpdateRequest,
     TelegramChatUpdate,
     UserSettingsResponse,
     UserSettingsUpdate,
 )
-from server.telegram import format_panic, send_telegram_message
+from server.telegram import format_alert, send_telegram_message
 from server.ws import ConnectionManager
 
 
@@ -32,7 +33,7 @@ manager = ConnectionManager()
 Base.metadata.create_all(bind=engine)
 
 COOLDOWN_USER_SEC = 2
-COOLDOWN_TEAM_SEC = 10
+COOLDOWN_TEAM_SEC = 2
 _user_last = {}
 _team_last = {}
 
@@ -148,10 +149,12 @@ def create_invite(
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
     if not user or not verify_password(payload.password, user.password_hash):
+        print(f"[AUTH] login failed for {payload.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = issue_token()
     db.add(SessionToken(token=token, user_id=user.id))
     db.commit()
+    print(f"[AUTH] login ok for {payload.username}")
     return AuthResponse(token=token, user_id=user.id, username=user.username, role=user.role)
 
 
@@ -275,6 +278,51 @@ def set_telegram_chat(
     )
 
 
+@app.patch("/teams/{team_id}", response_model=TeamResponse)
+async def update_team(
+    team_id: int,
+    payload: TeamUpdateRequest,
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _require_token(token, authorization, db)
+    membership = db.query(TeamMember).filter(
+        TeamMember.user_id == user.id, TeamMember.team_id == team_id
+    ).first()
+    if not membership and user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Not in team")
+    if membership and membership.role not in ("owner", "admin") and user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    team = db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if payload.name is not None:
+        team.name = payload.name
+    if payload.description is not None:
+        team.description = payload.description
+    db.commit()
+    members = _team_members_payload(db, team_id)
+    await manager.broadcast(
+        team.id,
+        {
+            "type": "team_update",
+            "team_id": team.id,
+            "team": {"name": team.name, "description": team.description},
+            "members": members,
+        },
+    )
+    return TeamResponse(
+        id=team.id,
+        name=team.name,
+        description=team.description,
+        owner_user_id=team.owner_user_id,
+        join_code=team.join_code,
+        telegram_chat_id=team.telegram_chat_id,
+        role=membership.role if membership else None,
+    )
+
+
 @app.get("/users/settings", response_model=UserSettingsResponse)
 def get_settings(
     token: str | None = None,
@@ -330,6 +378,7 @@ async def panic(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
+    print(f"[ALERT] panic request for team={payload.team_id}")
     user = _require_token(token, authorization, db)
     membership = db.query(TeamMember).filter(
         TeamMember.user_id == user.id, TeamMember.team_id == payload.team_id
@@ -339,23 +388,27 @@ async def panic(
 
     now = time.time()
     if now - _user_last.get(user.id, 0) < COOLDOWN_USER_SEC:
+        print("[ALERT] blocked by user cooldown")
         raise HTTPException(status_code=429, detail="User cooldown")
     if now - _team_last.get(payload.team_id, 0) < COOLDOWN_TEAM_SEC:
+        print("[ALERT] blocked by team cooldown")
         raise HTTPException(status_code=429, detail="Team cooldown")
     _user_last[user.id] = now
     _team_last[payload.team_id] = now
 
     team = db.get(Team, payload.team_id)
+    text = payload.text.strip() if payload.text else None
     message = PanicMessage(
         team_id=payload.team_id,
         sender_user_id=user.id,
         sender_name=user.username,
         event_id=str(uuid.uuid4()),
         ts=int(now * 1000),
+        text=text,
     )
     await manager.broadcast(payload.team_id, message.model_dump())
     await send_telegram_message(
-        team.telegram_chat_id, format_panic(team.name, user.username), team.telegram_bot_token
+        team.telegram_chat_id, format_alert(team.name, user.username, text), team.telegram_bot_token
     )
     return {"status": "ok", "event_id": message.event_id}
 
@@ -499,6 +552,7 @@ async def telegram_test(
     if not team or not team.telegram_chat_id or not team.telegram_bot_token:
         raise HTTPException(status_code=400, detail="Telegram not configured")
     await send_telegram_message(
-        team.telegram_chat_id, "подключился и готов к работе", team.telegram_bot_token
+        team.telegram_chat_id, "\u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u043b\u0441\u044f \u0438 \u0433\u043e\u0442\u043e\u0432 \u043a \u0440\u0430\u0431\u043e\u0442\u0435", team.telegram_bot_token
     )
     return {"status": "ok"}
+

@@ -43,12 +43,18 @@ class TitleBar(QtWidgets.QWidget):
     def _on_minimize(self):
         window = self.window()
         if window is not None:
-            window.showMinimized()
+            if hasattr(window, "minimize_to_tray"):
+                window.minimize_to_tray()
+            else:
+                window.showMinimized()
 
     def _on_close(self):
         window = self.window()
         if window is not None:
-            window.close()
+            if hasattr(window, "minimize_to_tray"):
+                window.minimize_to_tray()
+            else:
+                window.close()
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:

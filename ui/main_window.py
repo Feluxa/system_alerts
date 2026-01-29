@@ -16,6 +16,7 @@ APP_NAME = "Panic Alert BETA"
 
 class MainWindow(QtWidgets.QMainWindow):
     ws_message = QtCore.Signal(dict)
+    ws_status = QtCore.Signal(bool)
     def __init__(self, api_client, current_user):
         super().__init__()
         self.api = api_client
@@ -50,6 +51,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.alert_page = AlertPage()
         self.alert_page.panic_btn.clicked.connect(self._send_panic)
+        self.alert_page.send_btn.clicked.connect(self._send_text_alert)
+        self.alert_page.text_input.returnPressed.connect(self._send_text_alert)
         self.pages["alert"] = self.alert_page
         self.stack.addWidget(self.alert_page)
 
@@ -105,17 +108,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self._ws_client = None
         self._ws_ready = False
         self.ws_message.connect(self._handle_ws_message)
+        self.ws_status.connect(self._handle_ws_status)
         self._hotkey = GlobalHotkey(settings.get("hotkey", ""), self._send_panic)
         self._hotkey.start()
         self._start_ws()
+        self._allow_quit = False
+        self._setup_tray()
 
     def closeEvent(self, event):
         try:
+            if self._tray and self._tray.isVisible() and not self._allow_quit:
+                self.hide()
+                event.ignore()
+                return
             if self._ws_client:
                 self._ws_client.stop()
             if self._hotkey:
                 self._hotkey.stop()
         finally:
+            if not event.isAccepted():
+                return
             super().closeEvent(event)
 
     def mousePressEvent(self, event):
@@ -291,6 +303,59 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QApplication.instance().setWindowIcon(icon)
                 return
 
+    def _setup_tray(self):
+        if not QtWidgets.QSystemTrayIcon.isSystemTrayAvailable():
+            self._tray = None
+            return
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.setQuitOnLastWindowClosed(False)
+        self._tray = QtWidgets.QSystemTrayIcon(self.windowIcon(), self)
+        menu = QtWidgets.QMenu()
+        action_show = menu.addAction("Open")
+        action_quit = menu.addAction("Quit")
+        action_show.triggered.connect(self._tray_show)
+        action_quit.triggered.connect(self._tray_quit)
+        self._tray.setContextMenu(menu)
+        self._tray.activated.connect(self._tray_activated)
+        self._tray.show()
+
+    def _tray_show(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _tray_quit(self):
+        if self._tray:
+            self._tray.hide()
+        self._allow_quit = True
+        self.close()
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.quit()
+
+    def _tray_activated(self, reason):
+        if reason == QtWidgets.QSystemTrayIcon.Trigger:
+            if self.isVisible():
+                self.hide()
+            else:
+                self._tray_show()
+
+    def minimize_to_tray(self):
+        if self._tray and self._tray.isVisible():
+            self.hide()
+        else:
+            self.showMinimized()
+
+    def request_quit(self):
+        if self._tray:
+            self._tray.hide()
+        self._allow_quit = True
+        self.close()
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.quit()
+
     def _handle_settings_save(self, hotkey, sound_path, system_sound, volume):
         if not self.current_user:
             return
@@ -305,16 +370,23 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception:
             team = None
         if not team:
+            self.alert_page.set_ws_status(False)
             return
         ws_base = self.api.base_url.replace("http://", "ws://").replace("https://", "wss://")
         url = f"{ws_base}/ws?token={self.api.token}&team_id={team['id']}"
-        self._ws_client = WSClient(url, self._on_ws_message)
+        self._ws_client = WSClient(url, self._on_ws_message, self._on_ws_status)
         self._ws_client.start()
         self._ws_ready = True
         self.alert_page.set_hotkey(self.settings_page.hotkey.text().strip())
 
     def _on_ws_message(self, payload):
         self.ws_message.emit(payload)
+
+    def _on_ws_status(self, connected: bool):
+        self.ws_status.emit(connected)
+
+    def _handle_ws_status(self, connected: bool):
+        self.alert_page.set_ws_status(connected)
 
     def _handle_ws_message(self, payload):
         msg_type = payload.get("type")
@@ -323,6 +395,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if msg_type == "team_update":
             members = payload.get("members")
+            team_info = payload.get("team")
+            if team_info:
+                self.teams_page.apply_team_update(team_info, members)
+                return
             if isinstance(members, list):
                 self.teams_page.apply_member_update(members)
             else:
@@ -333,8 +409,26 @@ class MainWindow(QtWidgets.QMainWindow):
             team = self.api.my_team()
             if team:
                 self.api.send_panic(team["id"])
+                self.alert_page.set_status("Alert sent.")
+            else:
+                self.alert_page.set_status("No team selected.")
         except Exception:
-            pass
+            self.alert_page.set_status("Alert failed. Check server logs.")
+
+    def _send_text_alert(self):
+        text = self.alert_page.text_input.text().strip()
+        if not text:
+            return
+        try:
+            team = self.api.my_team()
+            if team:
+                self.api.send_panic(team["id"], text=text)
+                self.alert_page.text_input.clear()
+                self.alert_page.set_status("Text alert sent.")
+            else:
+                self.alert_page.set_status("No team selected.")
+        except Exception:
+            self.alert_page.set_status("Text alert failed. Check server logs.")
 
     def _on_team_changed(self, team_id: int):
         if self._ws_client:

@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class LoginDialog(QtWidgets.QDialog):
@@ -60,17 +60,27 @@ class LoginDialog(QtWidgets.QDialog):
         self.login_password = QtWidgets.QLineEdit()
         self.login_password.setPlaceholderText("Password")
         self.login_password.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.login_show_pw = QtWidgets.QToolButton()
+        self.login_show_pw.setCheckable(True)
+        self.login_show_pw.setIcon(self._load_icon("eye.svg"))
+        self.login_show_pw.setFixedSize(28, 28)
+        self.login_show_pw.setAutoRaise(True)
+        self.login_show_pw.clicked.connect(self._toggle_login_password)
         self.login_btn = QtWidgets.QPushButton("Continue")
         self.login_btn.setObjectName("primaryButton")
         self.login_status = QtWidgets.QLabel("")
         self.login_status.setObjectName("statusLabel")
+        self.login_status.setWordWrap(True)
 
         self.login_btn.clicked.connect(self._do_login)
 
         layout = QtWidgets.QVBoxLayout(self.login_tab)
         layout.setSpacing(12)
         layout.addWidget(self.login_username)
-        layout.addWidget(self.login_password)
+        login_pw_row = QtWidgets.QHBoxLayout()
+        login_pw_row.addWidget(self.login_password)
+        login_pw_row.addWidget(self.login_show_pw)
+        layout.addLayout(login_pw_row)
         layout.addWidget(self.login_btn)
         layout.addWidget(self.login_status)
         layout.addStretch(1)
@@ -83,13 +93,26 @@ class LoginDialog(QtWidgets.QDialog):
         self.register_password = QtWidgets.QLineEdit()
         self.register_password.setPlaceholderText("Password")
         self.register_password.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.register_show_pw = QtWidgets.QToolButton()
+        self.register_show_pw.setCheckable(True)
+        self.register_show_pw.setIcon(self._load_icon("eye.svg"))
+        self.register_show_pw.setFixedSize(28, 28)
+        self.register_show_pw.setAutoRaise(True)
+        self.register_show_pw.clicked.connect(self._toggle_register_password)
         self.register_password2 = QtWidgets.QLineEdit()
         self.register_password2.setPlaceholderText("Confirm password")
         self.register_password2.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.register_show_pw2 = QtWidgets.QToolButton()
+        self.register_show_pw2.setCheckable(True)
+        self.register_show_pw2.setIcon(self._load_icon("eye.svg"))
+        self.register_show_pw2.setFixedSize(28, 28)
+        self.register_show_pw2.setAutoRaise(True)
+        self.register_show_pw2.clicked.connect(self._toggle_register_password2)
         self.register_btn = QtWidgets.QPushButton("Create account")
         self.register_btn.setObjectName("primaryButton")
         self.register_status = QtWidgets.QLabel("")
         self.register_status.setObjectName("statusLabel")
+        self.register_status.setWordWrap(True)
 
         self.register_btn.clicked.connect(self._do_register)
 
@@ -97,8 +120,14 @@ class LoginDialog(QtWidgets.QDialog):
         layout.setSpacing(12)
         layout.addWidget(self.register_invite)
         layout.addWidget(self.register_username)
-        layout.addWidget(self.register_password)
-        layout.addWidget(self.register_password2)
+        register_pw_row = QtWidgets.QHBoxLayout()
+        register_pw_row.addWidget(self.register_password)
+        register_pw_row.addWidget(self.register_show_pw)
+        layout.addLayout(register_pw_row)
+        register_pw_row2 = QtWidgets.QHBoxLayout()
+        register_pw_row2.addWidget(self.register_password2)
+        register_pw_row2.addWidget(self.register_show_pw2)
+        layout.addLayout(register_pw_row2)
         layout.addWidget(self.register_btn)
         layout.addWidget(self.register_status)
         layout.addStretch(1)
@@ -127,8 +156,17 @@ class LoginDialog(QtWidgets.QDialog):
             return
         try:
             user = self.api_client.login(username, password)
-        except Exception:
-            self.login_status.setText("Invalid login or password.")
+        except Exception as exc:
+            message = "Login failed."
+            text = str(exc)
+            if "401" in text:
+                message = "Invalid login or password."
+            elif "Failed to establish a new connection" in text or "Connection refused" in text:
+                message = "Server is not reachable."
+            elif "ReadTimeout" in text or "timed out" in text:
+                message = "Server timeout. Try again."
+            self.login_status.setText(message)
+            print(f"Login failed: {exc}")
             return
         self.user = {
             "id": user.get("user_id"),
@@ -136,6 +174,14 @@ class LoginDialog(QtWidgets.QDialog):
             "role": user.get("role"),
         }
         self.accept()
+
+    def _toggle_login_password(self):
+        if self.login_show_pw.isChecked():
+            self.login_password.setEchoMode(QtWidgets.QLineEdit.Normal)
+            self.login_show_pw.setIcon(self._load_icon("eye-off.svg"))
+        else:
+            self.login_password.setEchoMode(QtWidgets.QLineEdit.Password)
+            self.login_show_pw.setIcon(self._load_icon("eye.svg"))
 
     def _do_register(self):
         invite = self.register_invite.text().strip()
@@ -162,4 +208,42 @@ class LoginDialog(QtWidgets.QDialog):
             }
             self.accept()
         except Exception as exc:
-            self.register_status.setText("Registration failed.")
+            message = "Registration failed."
+            text = str(exc)
+            if "Invalid invite code" in text:
+                message = "Invite code is invalid."
+            elif "Invite exhausted" in text:
+                message = "Invite code already used."
+            elif "Invite expired" in text:
+                message = "Invite code expired."
+            elif "Username taken" in text:
+                message = "Login already taken."
+            elif "Failed to establish a new connection" in text or "Connection refused" in text:
+                message = "Server is not reachable."
+            elif "ReadTimeout" in text or "timed out" in text:
+                message = "Server timeout. Try again."
+            self.register_status.setText(message)
+            print(f"Registration failed: {exc}")
+
+    def _toggle_register_password(self):
+        if self.register_show_pw.isChecked():
+            self.register_password.setEchoMode(QtWidgets.QLineEdit.Normal)
+            self.register_show_pw.setIcon(self._load_icon("eye-off.svg"))
+        else:
+            self.register_password.setEchoMode(QtWidgets.QLineEdit.Password)
+            self.register_show_pw.setIcon(self._load_icon("eye.svg"))
+
+    def _toggle_register_password2(self):
+        if self.register_show_pw2.isChecked():
+            self.register_password2.setEchoMode(QtWidgets.QLineEdit.Normal)
+            self.register_show_pw2.setIcon(self._load_icon("eye-off.svg"))
+        else:
+            self.register_password2.setEchoMode(QtWidgets.QLineEdit.Password)
+            self.register_show_pw2.setIcon(self._load_icon("eye.svg"))
+
+    def _load_icon(self, name: str) -> QtGui.QIcon:
+        base = QtCore.QDir.currentPath()
+        path = QtCore.QDir(base).filePath(f"assets/icons/{name}")
+        if QtCore.QFileInfo(path).exists():
+            return QtGui.QIcon(path)
+        return self.style().standardIcon(QtWidgets.QStyle.SP_DialogHelpButton)

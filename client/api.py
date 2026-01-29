@@ -110,6 +110,16 @@ class ApiClient:
         resp.raise_for_status()
         return resp.json()
 
+    def update_team(self, team_id: int, name: str | None, description: str | None) -> Dict[str, Any]:
+        resp = httpx.patch(
+            self._url(f"/teams/{team_id}"),
+            json={"name": name, "description": description},
+            headers=self._headers(),
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def test_telegram(self, team_id: int) -> Dict[str, Any]:
         resp = httpx.post(
             self._url(f"/teams/{team_id}/telegram_test"),

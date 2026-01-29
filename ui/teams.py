@@ -47,6 +47,9 @@ class TeamsPage(QtWidgets.QWidget):
         self.leave_btn = QtWidgets.QPushButton("Leave team")
         self.leave_btn.setObjectName("dangerButton")
         self.leave_btn.clicked.connect(self._leave_team)
+        self.edit_team_btn = QtWidgets.QPushButton("Edit team")
+        self.edit_team_btn.setObjectName("ghostButton")
+        self.edit_team_btn.clicked.connect(self._open_edit_dialog)
 
         self.telegram_box = QtWidgets.QGroupBox("Telegram Alerts")
         self.telegram_chat_id = QtWidgets.QLineEdit()
@@ -103,6 +106,7 @@ class TeamsPage(QtWidgets.QWidget):
         header_row = QtWidgets.QHBoxLayout()
         header_row.addWidget(self.team_title)
         header_row.addStretch(1)
+        header_row.addWidget(self.edit_team_btn)
         header_row.addWidget(self.leave_btn)
 
         invite_row = QtWidgets.QHBoxLayout()
@@ -182,6 +186,7 @@ class TeamsPage(QtWidgets.QWidget):
         self.leave_btn.setEnabled(enabled)
         self.telegram_toggle.setVisible(can_manage)
         self.telegram_box.setVisible(can_manage and self.telegram_toggle.isChecked())
+        self.edit_team_btn.setVisible(can_manage)
 
     def _can_manage_team(self):
         if not self.current_user or not self.current_team_role:
@@ -231,6 +236,17 @@ class TeamsPage(QtWidgets.QWidget):
                 break
         self._render_members(members)
         self._set_team_controls_enabled(True)
+
+    def apply_team_update(self, team_info: dict | None, members: list | None = None):
+        if not self.current_team or not team_info:
+            return
+        if "name" in team_info:
+            self.current_team["name"] = team_info.get("name", self.current_team.get("name"))
+        if "description" in team_info:
+            self.current_team["description"] = team_info.get("description")
+        self._set_team_header()
+        if isinstance(members, list):
+            self.apply_member_update(members)
 
     def _open_create_dialog(self):
         dialog = QtWidgets.QDialog(self)
@@ -342,6 +358,68 @@ class TeamsPage(QtWidgets.QWidget):
         layout.addWidget(frame)
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             self.refresh_teams()
+
+    def _open_edit_dialog(self):
+        if not self.current_team or not self._can_manage_team():
+            return
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Dialog)
+        dialog.setFixedSize(360, 240)
+        dialog.setObjectName("confirmDialog")
+        title = QtWidgets.QLabel("Edit team")
+        title.setObjectName("sectionTitle")
+        close_btn = QtWidgets.QPushButton("X")
+        close_btn.setObjectName("titleButtonClose")
+        close_btn.setFixedSize(28, 24)
+        close_btn.clicked.connect(dialog.reject)
+        name = QtWidgets.QLineEdit()
+        name.setPlaceholderText("Team name")
+        name.setText(self.current_team.get("name", ""))
+        desc = QtWidgets.QLineEdit()
+        desc.setPlaceholderText("Description")
+        desc.setText(self.current_team.get("description") or "")
+        status = QtWidgets.QLabel("")
+        status.setObjectName("statusLabel")
+        submit = QtWidgets.QPushButton("Save")
+        submit.setObjectName("primaryButton")
+
+        def _submit():
+            value = name.text().strip()
+            if not value:
+                status.setText("Enter team name.")
+                return
+            try:
+                data = self.api.update_team(self.current_team["id"], value, desc.text().strip())
+                self.current_team.update(
+                    {"name": data.get("name", value), "description": data.get("description")}
+                )
+                self._set_team_header()
+                status.setText("Team updated.")
+                dialog.accept()
+            except Exception:
+                status.setText("Failed to update team.")
+
+        submit.clicked.connect(_submit)
+
+        frame = QtWidgets.QFrame()
+        frame.setObjectName("confirmFrame")
+        frame_layout = QtWidgets.QVBoxLayout(frame)
+        frame_layout.setContentsMargins(16, 16, 16, 16)
+        frame_layout.setSpacing(12)
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(title)
+        header.addStretch(1)
+        header.addWidget(close_btn)
+        frame_layout.addLayout(header)
+        frame_layout.addWidget(name)
+        frame_layout.addWidget(desc)
+        frame_layout.addWidget(submit)
+        frame_layout.addWidget(status)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.addWidget(frame)
+        dialog.exec()
 
     def _generate_team_invite(self):
         if not self.current_team:

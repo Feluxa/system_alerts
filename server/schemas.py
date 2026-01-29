@@ -26,6 +26,11 @@ class TeamCreateRequest(BaseModel):
     description: Optional[str] = None
 
 
+class TeamUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class TeamJoinRequest(BaseModel):
     join_code: str
 
@@ -70,6 +75,7 @@ class MemberResponse(BaseModel):
 
 class PanicRequest(BaseModel):
     team_id: int
+    text: Optional[str] = None
 
 
 class PanicMessage(BaseModel):
@@ -79,3 +85,4 @@ class PanicMessage(BaseModel):
     sender_name: str
     event_id: str
     ts: int
+    text: Optional[str] = None

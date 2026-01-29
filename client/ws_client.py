@@ -6,9 +6,15 @@ import websockets
 
 
 class WSClient:
-    def __init__(self, url: str, on_message: Callable[[dict], None]):
+    def __init__(
+        self,
+        url: str,
+        on_message: Callable[[dict], None],
+        on_status: Optional[Callable[[bool], None]] = None,
+    ):
         self.url = url
         self.on_message = on_message
+        self.on_status = on_status
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._last_error = None
@@ -28,8 +34,12 @@ class WSClient:
 
     async def _loop(self):
         while not self._stop.is_set():
+            connected = False
             try:
                 async with websockets.connect(self.url, ping_interval=20, ping_timeout=20) as ws:
+                    connected = True
+                    if self.on_status:
+                        self.on_status(True)
                     async def _heartbeat():
                         while not self._stop.is_set():
                             try:
@@ -52,4 +62,9 @@ class WSClient:
                     hb_task.cancel()
             except Exception:
                 self._last_error = True
+                if not connected and self.on_status:
+                    self.on_status(False)
                 await asyncio.sleep(2)
+            finally:
+                if connected and self.on_status:
+                    self.on_status(False)

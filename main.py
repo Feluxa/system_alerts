@@ -1,3 +1,4 @@
+import signal
 import sys
 from pathlib import Path
 
@@ -23,6 +24,10 @@ def main():
     if dialog.exec() == QtWidgets.QDialog.Accepted and dialog.user:
         apply_theme(app, "dark")
         window = MainWindow(api_client, dialog.user)
+        def _handle_exit(*_):
+            window.request_quit()
+        signal.signal(signal.SIGINT, _handle_exit)
+        signal.signal(signal.SIGTERM, _handle_exit)
         window.show()
         sys.exit(app.exec())
 
