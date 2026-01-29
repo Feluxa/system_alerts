@@ -412,8 +412,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.alert_page.set_status("Alert sent.")
             else:
                 self.alert_page.set_status("No team selected.")
-        except Exception:
-            self.alert_page.set_status("Alert failed. Check server logs.")
+        except Exception as exc:
+            message = "Alert failed."
+            try:
+                import httpx
+                if isinstance(exc, httpx.HTTPStatusError):
+                    status = exc.response.status_code
+                    if status == 429:
+                        message = "Cooldown. Try again in 2s."
+                    elif status == 401:
+                        message = "Not authorized."
+                    else:
+                        message = f"Alert failed ({status})."
+            except Exception:
+                pass
+            self.alert_page.set_status(message)
+            print(f"Alert failed: {exc}")
 
     def _send_text_alert(self):
         text = self.alert_page.text_input.text().strip()
@@ -427,8 +441,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.alert_page.set_status("Text alert sent.")
             else:
                 self.alert_page.set_status("No team selected.")
-        except Exception:
-            self.alert_page.set_status("Text alert failed. Check server logs.")
+        except Exception as exc:
+            message = "Text alert failed."
+            try:
+                import httpx
+                if isinstance(exc, httpx.HTTPStatusError):
+                    status = exc.response.status_code
+                    if status == 429:
+                        message = "Cooldown. Try again in 2s."
+                    elif status == 401:
+                        message = "Not authorized."
+                    else:
+                        message = f"Text alert failed ({status})."
+            except Exception:
+                pass
+            self.alert_page.set_status(message)
+            print(f"Text alert failed: {exc}")
 
     def _on_team_changed(self, team_id: int):
         if self._ws_client:

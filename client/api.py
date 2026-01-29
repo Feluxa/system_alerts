@@ -8,7 +8,7 @@ class ApiClient:
     def __init__(self, base_url: Optional[str] = None):
         # http://127.0.0.1:8000
         # http://45.95.0.98:8000
-        self.base_url = base_url or os.getenv("ALERTS_API_URL", "http://45.95.0.98:8000")
+        self.base_url = base_url or os.getenv("ALERTS_API_URL", "http://127.0.0.1:8000")
         self.token: Optional[str] = None
 
     def _url(self, path: str) -> str:
@@ -149,10 +149,10 @@ class ApiClient:
         )
         resp.raise_for_status()
 
-    def send_panic(self, team_id: int) -> Dict[str, Any]:
+    def send_panic(self, team_id: int, text: str | None = None, **_) -> Dict[str, Any]:
         resp = httpx.post(
             self._url("/alerts/panic"),
-            json={"team_id": team_id},
+            json={"team_id": team_id, "text": text},
             headers=self._headers(),
             timeout=10,
         )
