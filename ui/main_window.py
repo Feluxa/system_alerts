@@ -1,5 +1,7 @@
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from client.resources import resource_path
+
 from client.hotkey import GlobalHotkey
 from client.local_settings import load_settings, save_settings
 from client.ws_client import WSClient
@@ -294,11 +296,10 @@ class MainWindow(QtWidgets.QMainWindow):
         apply_theme(QtWidgets.QApplication.instance(), theme)
 
     def _set_app_icon(self):
-        base = QtCore.QDir.currentPath()
         for name in ("photo.png", "photo.jpg", "photo.jpeg"):
-            path = QtCore.QDir(base).filePath(f"assets/photos/{name}")
-            if QtCore.QFileInfo(path).exists():
-                icon = QtGui.QIcon(path)
+            path = resource_path("assets", "photos", name)
+            if path.exists():
+                icon = QtGui.QIcon(str(path))
                 self.setWindowIcon(icon)
                 QtWidgets.QApplication.instance().setWindowIcon(icon)
                 return
@@ -310,7 +311,11 @@ class MainWindow(QtWidgets.QMainWindow):
         app = QtWidgets.QApplication.instance()
         if app is not None:
             app.setQuitOnLastWindowClosed(False)
-        self._tray = QtWidgets.QSystemTrayIcon(self.windowIcon(), self)
+        icon = self.windowIcon()
+        if icon.isNull():
+            icon = self.style().standardIcon(QtWidgets.QStyle.SP_ComputerIcon)
+        self._tray = QtWidgets.QSystemTrayIcon(icon, self)
+        self._tray.setToolTip(APP_NAME)
         menu = QtWidgets.QMenu()
         action_show = menu.addAction("Open")
         action_quit = menu.addAction("Quit")

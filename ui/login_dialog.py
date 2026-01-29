@@ -242,8 +242,8 @@ class LoginDialog(QtWidgets.QDialog):
             self.register_show_pw2.setIcon(self._load_icon("eye.svg"))
 
     def _load_icon(self, name: str) -> QtGui.QIcon:
-        base = QtCore.QDir.currentPath()
-        path = QtCore.QDir(base).filePath(f"assets/icons/{name}")
-        if QtCore.QFileInfo(path).exists():
-            return QtGui.QIcon(path)
+        from client.resources import resource_path
+        path = resource_path("assets", "icons", name)
+        if path.exists():
+            return QtGui.QIcon(str(path))
         return self.style().standardIcon(QtWidgets.QStyle.SP_DialogHelpButton)

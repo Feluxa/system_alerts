@@ -1,6 +1,6 @@
 import signal
 import sys
-from pathlib import Path
+from client.resources import resource_path
 
 from PySide6 import QtGui, QtWidgets
 
@@ -33,9 +33,8 @@ def main():
 
 
 def _load_app_icon() -> QtGui.QIcon:
-    base = Path.cwd() / "assets" / "photos"
     for name in ("photo.png", "photo.jpg", "photo.jpeg"):
-        path = base / name
+        path = resource_path("assets", "photos", name)
         if path.exists():
             return QtGui.QIcon(str(path))
     return QtGui.QIcon()
