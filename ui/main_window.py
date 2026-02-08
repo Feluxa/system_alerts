@@ -2,18 +2,21 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from client.resources import resource_path
 
+from client import autostart
 from client.hotkey import GlobalHotkey
 from client.local_settings import load_settings, save_settings
+from client.session_store import clear_active
 from client.ws_client import WSClient
 from ui.alerts import AlertPage
 from ui.invites import InvitePage
 from ui.settings import SettingsPage
+from ui.short_button import ShortButtonPage
 from ui.teams import TeamsPage
 from ui.titlebar import TitleBar
 from ui.sidebar import Sidebar
 
 
-APP_NAME = "Panic Alert BETA"
+APP_NAME = "Panic Alert BETA 2.0"
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -50,13 +53,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack = QtWidgets.QStackedWidget()
         self.stack.setMouseTracking(True)
         self.pages = {}
+        self._normal_min_size = QtCore.QSize(980, 640)
+        self._sb_min_size = QtCore.QSize(420, 320)
 
         self.alert_page = AlertPage()
-        self.alert_page.panic_btn.clicked.connect(self._send_panic)
-        self.alert_page.send_btn.clicked.connect(self._send_text_alert)
-        self.alert_page.text_input.returnPressed.connect(self._send_text_alert)
+        self.alert_page.panic_btn.clicked.connect(lambda: self._send_panic(self.alert_page))
+        self.alert_page.send_btn.clicked.connect(lambda: self._send_text_alert(self.alert_page))
+        self.alert_page.text_input.returnPressed.connect(lambda: self._send_text_alert(self.alert_page))
         self.pages["alert"] = self.alert_page
         self.stack.addWidget(self.alert_page)
+
+        self.sb_page = ShortButtonPage()
+        self.sb_page.panic_btn.clicked.connect(lambda: self._send_panic(self.sb_page))
+        self.sb_page.send_btn.clicked.connect(lambda: self._send_text_alert(self.sb_page))
+        self.sb_page.text_input.returnPressed.connect(lambda: self._send_text_alert(self.sb_page))
+        self.pages["sb"] = self.sb_page
+        self.stack.addWidget(self.sb_page)
 
         self.teams_page = TeamsPage(self.api)
         self.teams_page.set_current_user(current_user)
@@ -67,16 +79,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings_page = SettingsPage()
         self.settings_page.theme_changed.connect(self._handle_theme_change)
         self.settings_page.settings_saved.connect(self._handle_settings_save)
+        self.settings_page.logout_requested.connect(self._logout)
         self.pages["settings"] = self.settings_page
         self.stack.addWidget(self.settings_page)
         settings = load_settings()
+        if autostart.is_supported():
+            try:
+                settings["auto_start"] = autostart.get_enabled()
+            except Exception:
+                pass
         self.settings_page.set_theme(settings.get("theme", "dark"))
         self.settings_page.set_settings(
             settings.get("hotkey", ""),
             settings.get("sound_path", ""),
             settings.get("system_sound", "Siren"),
             settings.get("volume", 70),
+            settings.get("auto_start", False),
         )
+        if not autostart.is_supported():
+            self.settings_page.auto_start.setEnabled(False)
+            self.settings_page.auto_start.setToolTip("Autostart is supported on Windows only.")
         self._apply_theme(settings.get("theme", "dark"))
         self.alert_page.set_hotkey(settings.get("hotkey", ""))
 
@@ -109,6 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._ws_client = None
         self._ws_ready = False
+        self.next_action = "quit"
         self.ws_message.connect(self._handle_ws_message)
         self.ws_status.connect(self._handle_ws_status)
         self._hotkey = GlobalHotkey(settings.get("hotkey", ""), self._send_panic)
@@ -116,6 +139,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._start_ws()
         self._allow_quit = False
         self._setup_tray()
+        self._setup_shortcuts()
 
     def closeEvent(self, event):
         try:
@@ -164,6 +188,13 @@ class MainWindow(QtWidgets.QMainWindow):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_Menu:
+            self.sidebar.toggle_sidebar()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def eventFilter(self, watched, event):
         if isinstance(event, QtGui.QMouseEvent):
@@ -224,6 +255,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _perform_resize(self, global_pos):
         if not self._start_geo or not self._press_pos:
             return
+        if self.isMaximized():
+            return
         dx = global_pos.x() - self._press_pos.x()
         dy = global_pos.y() - self._press_pos.y()
         rect = self._start_geo
@@ -240,25 +273,36 @@ class MainWindow(QtWidgets.QMainWindow):
             if new_w >= min_w:
                 x = rect.x() + dx
                 w = new_w
+            else:
+                w = min_w
+                x = rect.right() - min_w + 1
         if "right" in self._resize_edges:
             new_w = w + dx
             if new_w >= min_w:
                 w = new_w
+            else:
+                w = min_w
         if "top" in self._resize_edges:
             new_h = h - dy
             if new_h >= min_h:
                 y = rect.y() + dy
                 h = new_h
+            else:
+                h = min_h
+                y = rect.bottom() - min_h + 1
         if "bottom" in self._resize_edges:
             new_h = h + dy
             if new_h >= min_h:
                 h = new_h
+            else:
+                h = min_h
 
         self.setGeometry(x, y, w, h)
 
     def _configure_sidebar(self):
         items = [
             ("alert", "Alert"),
+            ("sb", "SB"),
             ("teams", "Teams"),
         ]
         if self.invite_page is not None:
@@ -275,6 +319,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.stack.setCurrentWidget(page)
         self.sidebar.set_active(key)
+        if key == "sb":
+            self.setMinimumSize(self._sb_min_size)
+        else:
+            self.setMinimumSize(self._normal_min_size)
 
     def _open_settings(self):
         self._on_nav_changed("settings")
@@ -288,6 +336,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sound_path=self.settings_page.sound_custom_path.text().strip(),
             system_sound=self.settings_page.sound_select.currentText(),
             volume=self.settings_page.volume.value(),
+            auto_start=self.settings_page.auto_start.isChecked(),
         )
         self._apply_theme(theme)
 
@@ -325,6 +374,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tray.activated.connect(self._tray_activated)
         self._tray.show()
 
+    def _setup_shortcuts(self):
+        self._menu_shortcut = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Menu), self)
+        self._menu_shortcut.setContext(QtCore.Qt.ApplicationShortcut)
+        self._menu_shortcut.activated.connect(self.sidebar.toggle_sidebar)
+
     def _tray_show(self):
         self.showNormal()
         self.raise_()
@@ -356,16 +410,33 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._tray:
             self._tray.hide()
         self._allow_quit = True
+        self.next_action = "quit"
         self.close()
         app = QtWidgets.QApplication.instance()
         if app is not None:
             app.quit()
 
-    def _handle_settings_save(self, hotkey, sound_path, system_sound, volume):
+    def _logout(self):
+        clear_active()
+        if self._tray:
+            self._tray.hide()
+        self._allow_quit = True
+        self.next_action = "logout"
+        self.close()
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.quit()
+
+    def _handle_settings_save(self, hotkey, sound_path, system_sound, volume, auto_start):
         if not self.current_user:
             return
-        current_theme = self.settings_page.theme_select.currentText().lower()
-        save_settings(current_theme, hotkey, sound_path, system_sound, volume)
+        current_theme = self.settings_page.theme_select.currentData() or "dark"
+        save_settings(current_theme, hotkey, sound_path, system_sound, volume, auto_start)
+        if autostart.is_supported():
+            try:
+                autostart.set_enabled(auto_start)
+            except Exception:
+                self.settings_page.status.setText("Failed to update autostart.")
         self._hotkey.update_key(hotkey)
         self.alert_page.set_hotkey(hotkey)
 
@@ -409,14 +480,14 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.teams_page.refresh_teams()
 
-    def _send_panic(self):
+    def _send_panic(self, source_page=None):
         try:
             team = self.api.my_team()
             if team:
                 self.api.send_panic(team["id"])
-                self.alert_page.set_status("Alert sent.")
+                self._set_alert_status("Alert sent.", source_page)
             else:
-                self.alert_page.set_status("No team selected.")
+                self._set_alert_status("No team selected.", source_page)
         except Exception as exc:
             message = "Alert failed."
             try:
@@ -431,21 +502,22 @@ class MainWindow(QtWidgets.QMainWindow):
                         message = f"Alert failed ({status})."
             except Exception:
                 pass
-            self.alert_page.set_status(message)
+            self._set_alert_status(message, source_page)
             print(f"Alert failed: {exc}")
 
-    def _send_text_alert(self):
-        text = self.alert_page.text_input.text().strip()
+    def _send_text_alert(self, source_page=None):
+        page = source_page if source_page is not None else self.alert_page
+        text = page.text_input.text().strip()
         if not text:
             return
         try:
             team = self.api.my_team()
             if team:
                 self.api.send_panic(team["id"], text=text)
-                self.alert_page.text_input.clear()
-                self.alert_page.set_status("Text alert sent.")
+                page.text_input.clear()
+                self._set_alert_status("Text alert sent.", source_page)
             else:
-                self.alert_page.set_status("No team selected.")
+                self._set_alert_status("No team selected.", source_page)
         except Exception as exc:
             message = "Text alert failed."
             try:
@@ -460,8 +532,13 @@ class MainWindow(QtWidgets.QMainWindow):
                         message = f"Text alert failed ({status})."
             except Exception:
                 pass
-            self.alert_page.set_status(message)
+            self._set_alert_status(message, source_page)
             print(f"Text alert failed: {exc}")
+
+    def _set_alert_status(self, text: str, source_page=None):
+        self.alert_page.set_status(text)
+        if self.sb_page is not None:
+            self.sb_page.set_status(text)
 
     def _on_team_changed(self, team_id: int):
         if self._ws_client:

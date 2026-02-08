@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from typing import Optional
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from server.auth import hash_password, issue_token, verify_password
 from server.db import Base, engine, get_db
-from server.models import InviteCode, SessionToken, Team, TeamMember, User, UserSettings
+from server.models import AppConfig, InviteCode, SessionToken, Team, TeamMember, User, UserSettings
 from server.schemas import (
     AuthResponse,
     LoginRequest,
@@ -22,6 +23,8 @@ from server.schemas import (
     TelegramChatUpdate,
     UserSettingsResponse,
     UserSettingsUpdate,
+    VersionInfoResponse,
+    VersionPolicyUpdateRequest,
 )
 from server.telegram import format_alert, send_telegram_message
 from server.ws import ConnectionManager
@@ -32,10 +35,18 @@ manager = ConnectionManager()
 
 Base.metadata.create_all(bind=engine)
 
-COOLDOWN_USER_SEC = 2
-COOLDOWN_TEAM_SEC = 2
+COOLDOWN_USER_SEC = 1
+COOLDOWN_TEAM_SEC = 1
 _user_last = {}
 _team_last = {}
+MIN_CLIENT_VERSION = os.getenv("MIN_CLIENT_VERSION", "1.0.0")
+LATEST_CLIENT_VERSION = os.getenv("LATEST_CLIENT_VERSION", MIN_CLIENT_VERSION)
+CLIENT_DOWNLOAD_URL = os.getenv("CLIENT_DOWNLOAD_URL", "https://github.com/Feluxa/system_alerts/releases")
+CLIENT_HARD_BLOCK = os.getenv("CLIENT_HARD_BLOCK", "true").strip().lower() not in ("0", "false", "off", "no")
+CFG_MIN_CLIENT_VERSION = "min_client_version"
+CFG_LATEST_CLIENT_VERSION = "latest_client_version"
+CFG_CLIENT_DOWNLOAD_URL = "client_download_url"
+CFG_CLIENT_HARD_BLOCK = "client_hard_block"
 
 
 def _team_members_payload(db: Session, team_id: int):
@@ -51,6 +62,46 @@ def _team_members_payload(db: Session, team_id: int):
     return members
 
 
+def _require_super_admin(user: User):
+    if user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+def _upsert_config(db: Session, key: str, value: str):
+    row = db.get(AppConfig, key)
+    if row:
+        row.value = value
+    else:
+        db.add(AppConfig(key=key, value=value))
+
+
+def _bool_to_str(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _str_to_bool(value: str, default: bool = True) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "on", "yes")
+
+
+def _version_policy(db: Session) -> dict:
+    rows = db.query(AppConfig).filter(
+        AppConfig.key.in_(
+            [CFG_MIN_CLIENT_VERSION, CFG_LATEST_CLIENT_VERSION, CFG_CLIENT_DOWNLOAD_URL, CFG_CLIENT_HARD_BLOCK]
+        )
+    ).all()
+    data = {row.key: row.value for row in rows}
+    min_client = data.get(CFG_MIN_CLIENT_VERSION, MIN_CLIENT_VERSION)
+    latest_client = data.get(CFG_LATEST_CLIENT_VERSION, LATEST_CLIENT_VERSION)
+    return {
+        "min_client_version": min_client,
+        "latest_client_version": latest_client,
+        "download_url": data.get(CFG_CLIENT_DOWNLOAD_URL, CLIENT_DOWNLOAD_URL),
+        "hard_block": _str_to_bool(data.get(CFG_CLIENT_HARD_BLOCK), CLIENT_HARD_BLOCK),
+    }
+
+
 @app.on_event("startup")
 def _bootstrap_invite():
     from server.db import SessionLocal
@@ -60,6 +111,13 @@ def _bootstrap_invite():
     try:
         if db.query(User).count() == 0 and db.query(InviteCode).count() == 0:
             db.add(InviteCode(code="BOOTSTRAP", is_active=True, max_uses=1, used_count=0))
+            db.commit()
+        # Seed runtime-editable version policy (can be changed from admin panel).
+        if not db.get(AppConfig, CFG_MIN_CLIENT_VERSION):
+            _upsert_config(db, CFG_MIN_CLIENT_VERSION, MIN_CLIENT_VERSION)
+            _upsert_config(db, CFG_LATEST_CLIENT_VERSION, LATEST_CLIENT_VERSION)
+            _upsert_config(db, CFG_CLIENT_DOWNLOAD_URL, CLIENT_DOWNLOAD_URL)
+            _upsert_config(db, CFG_CLIENT_HARD_BLOCK, _bool_to_str(CLIENT_HARD_BLOCK))
             db.commit()
         if engine.url.drivername.startswith("sqlite"):
             from sqlalchemy import text
@@ -127,6 +185,50 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(SessionToken(token=token, user_id=user.id))
     db.commit()
     return AuthResponse(token=token, user_id=user.id, username=user.username, role=user.role)
+
+
+@app.get("/meta/version", response_model=VersionInfoResponse)
+def meta_version(db: Session = Depends(get_db)):
+    return VersionInfoResponse(**_version_policy(db))
+
+
+@app.get("/admin/version-policy", response_model=VersionInfoResponse)
+def admin_get_version_policy(
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _require_token(token, authorization, db)
+    _require_super_admin(user)
+    return VersionInfoResponse(**_version_policy(db))
+
+
+@app.patch("/admin/version-policy", response_model=VersionInfoResponse)
+def admin_update_version_policy(
+    payload: VersionPolicyUpdateRequest,
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _require_token(token, authorization, db)
+    _require_super_admin(user)
+    current = _version_policy(db)
+    if payload.min_client_version is not None:
+        _upsert_config(db, CFG_MIN_CLIENT_VERSION, payload.min_client_version.strip())
+    if payload.latest_client_version is not None:
+        _upsert_config(db, CFG_LATEST_CLIENT_VERSION, payload.latest_client_version.strip())
+    if payload.download_url is not None:
+        _upsert_config(db, CFG_CLIENT_DOWNLOAD_URL, payload.download_url.strip())
+    if payload.hard_block is not None:
+        _upsert_config(db, CFG_CLIENT_HARD_BLOCK, _bool_to_str(payload.hard_block))
+    db.commit()
+    # Ensure latest >= min if admin only changed one field.
+    updated = _version_policy(db)
+    if not updated["latest_client_version"]:
+        _upsert_config(db, CFG_LATEST_CLIENT_VERSION, updated["min_client_version"])
+        db.commit()
+        updated = _version_policy(db)
+    return VersionInfoResponse(**{**current, **updated})
 
 
 @app.post("/invites/create")

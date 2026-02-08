@@ -70,3 +70,10 @@ class SessionToken(Base):
     token = Column(String(64), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
+
+
+class AppConfig(Base):
+    __tablename__ = "app_config"
+
+    key = Column(String(64), primary_key=True)
+    value = Column(String(512), nullable=False)

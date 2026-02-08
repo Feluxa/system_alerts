@@ -5,18 +5,25 @@ from PySide6 import QtCore, QtGui, QtMultimedia, QtWidgets
 
 class SettingsPage(QtWidgets.QWidget):
     theme_changed = QtCore.Signal(str)
-    settings_saved = QtCore.Signal(str, str, str, int)
+    settings_saved = QtCore.Signal(str, str, str, int, bool)
+    logout_requested = QtCore.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.appearance_box = QtWidgets.QGroupBox("Appearance")
         self.theme_select = QtWidgets.QComboBox()
-        self.theme_select.addItems(["Dark", "Light"])
+        self.theme_select.addItem("Dark", "dark")
+        self.theme_select.addItem("Light", "light")
+        self.theme_select.addItem("Neon", "neon")
+        self.theme_select.addItem("Pastel", "pastel")
         self.theme_select.currentTextChanged.connect(self._emit_theme)
 
         appearance_form = QtWidgets.QFormLayout(self.appearance_box)
         appearance_form.addRow("Theme", self.theme_select)
+        self.auto_start = QtWidgets.QCheckBox("Run at system startup")
+        self.auto_start.stateChanged.connect(lambda _: self._schedule_autosave())
+        appearance_form.addRow("Autostart", self.auto_start)
 
         self.hotkey_box = QtWidgets.QGroupBox("Hotkey")
         self.hotkey = QtWidgets.QLineEdit()
@@ -67,15 +74,22 @@ class SettingsPage(QtWidgets.QWidget):
         sound_form.addRow("Volume", volume_row)
 
         self.save_btn = QtWidgets.QPushButton("Save settings")
+        self.logout_btn = QtWidgets.QPushButton("Log out")
+        self.logout_btn.setObjectName("ghostButton")
         self.status = QtWidgets.QLabel("")
         self.status.setObjectName("statusLabel")
         self.save_btn.clicked.connect(self._save_settings)
+        self.logout_btn.clicked.connect(self.logout_requested.emit)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.appearance_box)
         layout.addWidget(self.hotkey_box)
         layout.addWidget(self.sound_box)
-        layout.addWidget(self.save_btn, alignment=QtCore.Qt.AlignLeft)
+        action_row = QtWidgets.QHBoxLayout()
+        action_row.addWidget(self.save_btn)
+        action_row.addWidget(self.logout_btn)
+        action_row.addStretch(1)
+        layout.addLayout(action_row)
         layout.addWidget(self.status)
         layout.addStretch(1)
         self._capture_mode = False
@@ -93,21 +107,24 @@ class SettingsPage(QtWidgets.QWidget):
         self.volume_value.setText(f"{value}%")
 
     def set_theme(self, theme):
-        index = 0 if theme == "dark" else 1
+        index = self.theme_select.findData(theme)
+        if index < 0:
+            index = self.theme_select.findData("dark")
         self.theme_select.blockSignals(True)
         self.theme_select.setCurrentIndex(index)
         self.theme_select.blockSignals(False)
 
     def _emit_theme(self, text):
-        theme = "dark" if text.lower().startswith("dark") else "light"
+        theme = self.theme_select.currentData() or "dark"
         self.theme_changed.emit(theme)
 
-    def set_settings(self, hotkey, sound_path, system_sound, volume):
+    def set_settings(self, hotkey, sound_path, system_sound, volume, auto_start=False):
         self.hotkey.setText(hotkey or "")
         self.sound_custom_path.setText(sound_path or "")
         self.set_system_sound(system_sound or "Siren")
         if volume is not None:
             self.volume.setValue(int(volume))
+        self.auto_start.setChecked(bool(auto_start))
 
     def set_system_sound(self, system_sound):
         index = self.sound_select.findText(system_sound)
@@ -153,7 +170,8 @@ class SettingsPage(QtWidgets.QWidget):
         sound_path = self.sound_custom_path.text().strip()
         system_sound = self.sound_select.currentText()
         volume = self.volume.value()
-        self.settings_saved.emit(hotkey, sound_path, system_sound, volume)
+        auto_start = self.auto_start.isChecked()
+        self.settings_saved.emit(hotkey, sound_path, system_sound, volume, auto_start)
 
     def _browse_sound(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -186,7 +204,8 @@ class SettingsPage(QtWidgets.QWidget):
         sound_path = self.sound_custom_path.text().strip()
         system_sound = self.sound_select.currentText()
         volume = self.volume.value()
-        self.settings_saved.emit(hotkey, sound_path, system_sound, volume)
+        auto_start = self.auto_start.isChecked()
+        self.settings_saved.emit(hotkey, sound_path, system_sound, volume, auto_start)
         self.status.setText("Settings saved.")
 
     def _resolve_system_sound(self, name):

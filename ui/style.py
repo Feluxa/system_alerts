@@ -2,11 +2,15 @@ from PySide6 import QtGui, QtWidgets
 
 
 def apply_theme(app: QtWidgets.QApplication, theme: str):
-    theme = theme if theme in ("dark", "light") else "dark"
+    theme = theme if theme in ("dark", "light", "neon", "pastel") else "dark"
     app.setProperty("theme", theme)
     app.setStyle("Fusion")
     if theme == "light":
         _apply_light(app)
+    elif theme == "neon":
+        _apply_neon(app)
+    elif theme == "pastel":
+        _apply_pastel(app)
     else:
         _apply_dark(app)
 
@@ -285,14 +289,14 @@ def _apply_dark(app: QtWidgets.QApplication):
 
 def _apply_light(app: QtWidgets.QApplication):
     palette = QtGui.QPalette()
-    palette.setColor(QtGui.QPalette.Window, QtGui.QColor("#ffffff"))
-    palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#0f172a"))
-    palette.setColor(QtGui.QPalette.Base, QtGui.QColor("#f8fafc"))
-    palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor("#f1f5f9"))
-    palette.setColor(QtGui.QPalette.Text, QtGui.QColor("#0f172a"))
+    palette.setColor(QtGui.QPalette.Window, QtGui.QColor("#f4f3f1"))
+    palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#1f2937"))
+    palette.setColor(QtGui.QPalette.Base, QtGui.QColor("#ffffff"))
+    palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor("#eeece8"))
+    palette.setColor(QtGui.QPalette.Text, QtGui.QColor("#1f2937"))
     palette.setColor(QtGui.QPalette.Button, QtGui.QColor("#ffffff"))
-    palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor("#0f172a"))
-    palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor("#0f172a"))
+    palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor("#1f2937"))
+    palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor("#4a5568"))
     palette.setColor(QtGui.QPalette.HighlightedText, QtGui.QColor("#ffffff"))
     app.setPalette(palette)
 
@@ -301,37 +305,37 @@ def _apply_light(app: QtWidgets.QApplication):
         QWidget {
             font-size: 13px;
             font-family: "Inter", "Segoe UI", "SF Pro Text", "Arial";
-            color: #0f172a;
+            color: #1f2937;
         }
         QMainWindow {
-            background-color: #ffffff;
+            background-color: #f4f3f1;
         }
         QDialog#loginDialog {
-            background: #ffffff;
+            background: #f4f3f1;
         }
         QFrame#loginFrame {
             background: #ffffff;
-            border: 1px solid #000000;
+            border: 1px solid #d8d3cb;
             border-radius: 12px;
         }
         QFrame#windowFrame {
-            background: #ffffff;
-            border: 1px solid #000000;
+            background: #f4f3f1;
+            border: 1px solid #d8d3cb;
             border-radius: 12px;
         }
         QDialog#confirmDialog {
-            background: #ffffff;
-            border: 1px solid #000000;
+            background: #f4f3f1;
+            border: 1px solid #d8d3cb;
             border-radius: 12px;
         }
         QFrame#confirmFrame {
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #d8d3cb;
             border-radius: 12px;
         }
         QWidget#titleBar {
-            background: #ffffff;
-            border-bottom: 1px solid #e2e8f0;
+            background: #f8f6f3;
+            border-bottom: 1px solid #d8d3cb;
         }
         QLabel#loginTitle {
             font-size: 20px;
@@ -345,16 +349,16 @@ def _apply_light(app: QtWidgets.QApplication):
         }
         QTabBar::tab {
             background: transparent;
-            color: #64748b;
+            color: #6b7280;
             padding: 6px 12px;
         }
         QTabBar::tab:selected {
-            color: #0f172a;
-            border-bottom: 2px solid #0f172a;
+            color: #1f2937;
+            border-bottom: 2px solid #4a5568;
         }
         QFrame#sidebar {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: #f9f7f4;
+            border: 1px solid #d8d3cb;
             border-radius: 16px;
         }
         QPushButton#navButton {
@@ -363,56 +367,61 @@ def _apply_light(app: QtWidgets.QApplication):
             border-radius: 10px;
             background: transparent;
             border: 1px solid transparent;
+            color: #1f2937;
         }
         QPushButton#navButton[collapsed="true"] {
             text-align: center;
             padding: 10px 0;
+            color: #1f2937;
         }
         QPushButton#navButton:checked {
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
+            background: #ece8e1;
+            border: 1px solid #ddd7ce;
+            color: #111827;
         }
         QToolButton#sidebarToggle {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #ece8e1;
+            border: 1px solid #ddd7ce;
             border-radius: 10px;
             padding: 6px 8px;
+            color: #1f2937;
         }
         QToolButton#sidebarToggle:hover {
-            background: #e2e8f0;
+            background: #e3ddd4;
         }
         QFrame#profileCard {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #f1ece5;
+            border: 1px solid #ddd7ce;
             border-radius: 14px;
         }
         QPushButton#avatarButton {
-            background: #e2e8f0;
-            border: 1px solid #cbd5f5;
+            background: #e2dbd2;
+            border: 1px solid #d0c6ba;
             border-radius: 16px;
             min-width: 32px;
             min-height: 32px;
             max-width: 32px;
             max-height: 32px;
             padding: 0;
-            color: #0f172a;
+            color: #1f2937;
         }
         QPushButton#avatarButton:hover {
-            background: #cbd5f5;
+            background: #d8cec2;
         }
         QLabel#profileName {
             font-weight: 600;
+            color: #1f2937;
         }
         QLabel#profileRole {
-            color: #64748b;
+            color: #6b7280;
         }
         QPushButton#ghostButton {
             background: transparent;
-            border: 1px solid #e2e8f0;
-            color: #0f172a;
+            border: 1px solid #d8d3cb;
+            color: #1f2937;
         }
         QPushButton#ghostButton:hover {
-            background: #f1f5f9;
+            background: #ece8e1;
         }
         QPushButton#dangerButton {
             background: #fee2e2;
@@ -435,54 +444,54 @@ def _apply_light(app: QtWidgets.QApplication):
             background: #7f1d1d;
         }
         QPushButton#primaryButton {
-            background: #0f172a;
-            border: 1px solid #0f172a;
+            background: #3f4a5a;
+            border: 1px solid #3f4a5a;
             color: #ffffff;
         }
         QPushButton#primaryButton:hover {
-            background: #111827;
+            background: #374151;
         }
         QPushButton#primaryOutlineButton {
             background: transparent;
-            border: 2px solid #0f172a;
-            color: #0f172a;
+            border: 2px solid #3f4a5a;
+            color: #3f4a5a;
             font-size: 14px;
             font-weight: 600;
         }
         QPushButton#primaryOutlineButton:hover {
-            background: #f1f5f9;
+            background: #ece8e1;
         }
         QListWidget {
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #d8d3cb;
             border-radius: 12px;
             padding: 8px;
         }
         QListWidget::item {
             padding: 10px 12px;
             border-radius: 8px;
-            color: #0f172a;
+            color: #1f2937;
         }
         QListWidget::item:selected {
-            background: #0f172a;
+            background: #3f4a5a;
             color: #ffffff;
         }
         QPushButton {
             padding: 8px 14px;
             border-radius: 10px;
-            background: #0f172a;
+            background: #3f4a5a;
             color: #ffffff;
-            border: 1px solid #0f172a;
+            border: 1px solid #3f4a5a;
         }
         QPushButton:hover {
-            background: #111827;
+            background: #374151;
         }
         QPushButton:pressed {
-            background: #0b1220;
+            background: #2f3744;
         }
         QPushButton[active="true"] {
-            background: #0f172a;
-            border: 1px solid #0f172a;
+            background: #3f4a5a;
+            border: 1px solid #3f4a5a;
             color: #ffffff;
         }
         QPushButton#titleButton, QPushButton#titleButtonClose {
@@ -492,9 +501,9 @@ def _apply_light(app: QtWidgets.QApplication):
             max-height: 24px;
             padding: 0;
             border-radius: 6px;
-            background: #f1f5f9;
-            color: #0f172a;
-            border: 1px solid #e2e8f0;
+            background: #f1f5fb;
+            color: #1f2937;
+            border: 1px solid #d8d3cb;
         }
         QPushButton#titleButtonClose {
             background: #fee2e2;
@@ -510,42 +519,166 @@ def _apply_light(app: QtWidgets.QApplication):
         }
         QLineEdit, QComboBox, QTableWidget, QTabWidget::pane, QSlider, QGroupBox {
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #d8d3cb;
             border-radius: 10px;
             padding: 8px;
-            color: #0f172a;
+            color: #1f2937;
         }
         QGroupBox::title {
-            color: #64748b;
+            color: #6b7280;
             subcontrol-origin: margin;
             left: 8px;
             padding: 0 4px;
         }
         QHeaderView::section {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #f3efe9;
+            border: 1px solid #d8d3cb;
             padding: 8px;
-            color: #0f172a;
+            color: #1f2937;
         }
         QLabel#appTitle {
             font-size: 18px;
             font-weight: 600;
-            color: #0f172a;
+            color: #1f2937;
         }
         QLabel#sectionTitle {
             font-size: 14px;
             font-weight: 600;
-            color: #0f172a;
+            color: #1f2937;
         }
         QLabel#badge {
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
+            background: #ece8e1;
+            border: 1px solid #ddd7ce;
             border-radius: 10px;
             padding: 6px 10px;
-            color: #0f172a;
+            color: #1f2937;
         }
         QLabel#statusLabel {
-            color: #64748b;
+            color: #6b7280;
+        }
+        """
+    )
+
+
+def _apply_neon(app: QtWidgets.QApplication):
+    _apply_dark(app)
+    app.setStyleSheet(
+        app.styleSheet()
+        + """
+        QMainWindow {
+            background-color: #111827;
+        }
+        QFrame#windowFrame, QFrame#loginFrame, QDialog#confirmDialog {
+            background: #111827;
+            border: 1px solid #273349;
+        }
+        QWidget#titleBar {
+            background: #111827;
+            border-bottom: 1px solid #273349;
+        }
+        QFrame#sidebar {
+            background: #131d2d;
+            border: 1px solid #273349;
+        }
+        QPushButton#primaryButton {
+            background: #14b8a6;
+            border: 1px solid #14b8a6;
+            color: #0b1220;
+        }
+        QPushButton#primaryButton:hover {
+            background: #0f9f90;
+        }
+        QPushButton#primaryOutlineButton {
+            border: 2px solid #14b8a6;
+            color: #2dd4bf;
+        }
+        QPushButton#primaryOutlineButton:hover {
+            background: #1a2a3a;
+        }
+        QPushButton#panicButton {
+            background: #f43f5e;
+            border: 1px solid #f43f5e;
+            color: #ffffff;
+        }
+        QPushButton#panicButton:hover {
+            background: #e11d48;
+        }
+        QTabBar::tab:selected {
+            color: #e6f7ff;
+            border-bottom: 2px solid #14b8a6;
+        }
+        QPushButton[active="true"], QPushButton#navButton:checked {
+            background: #1a2a3a;
+            border: 1px solid #2b425b;
+            color: #7ee7da;
+        }
+        QLabel#statusLabel {
+            color: #9ab0c7;
+        }
+        """
+    )
+
+
+def _apply_pastel(app: QtWidgets.QApplication):
+    _apply_light(app)
+    app.setStyleSheet(
+        app.styleSheet()
+        + """
+        QMainWindow {
+            background-color: #f8f5f2;
+        }
+        QFrame#windowFrame, QDialog#confirmDialog {
+            background: #f8f5f2;
+            border: 1px solid #ddd5cc;
+        }
+        QFrame#loginFrame {
+            border: 1px solid #ddd5cc;
+        }
+        QWidget#titleBar {
+            background: #fdf8f4;
+            border-bottom: 1px solid #ddd5cc;
+        }
+        QFrame#sidebar {
+            background: #fbf8f5;
+            border: 1px solid #ddd5cc;
+        }
+        QPushButton#primaryButton {
+            background: #8b7fa8;
+            border: 1px solid #8b7fa8;
+            color: #ffffff;
+        }
+        QPushButton#primaryButton:hover {
+            background: #7a6f96;
+        }
+        QPushButton#primaryOutlineButton {
+            border: 2px solid #8b7fa8;
+            color: #8b7fa8;
+        }
+        QPushButton#primaryOutlineButton:hover {
+            background: #f0ebe4;
+        }
+        QPushButton#panicButton {
+            background: #d9869a;
+            border: 1px solid #d9869a;
+            color: #ffffff;
+        }
+        QPushButton#panicButton:hover {
+            background: #c87589;
+        }
+        QTabBar::tab:selected {
+            color: #4b5563;
+            border-bottom: 2px solid #8b7fa8;
+        }
+        QPushButton#navButton:checked {
+            background: #eee9e2;
+            border: 1px solid #ddd5cc;
+            color: #1f2937;
+        }
+        QPushButton#navButton, QPushButton#navButton[collapsed="true"] {
+            color: #1f2937;
+        }
+        QLabel#statusLabel {
+            color: #6b7280;
         }
         """
     )

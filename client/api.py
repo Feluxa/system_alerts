@@ -163,3 +163,34 @@ class ApiClient:
         resp = httpx.post(self._url("/invites/create"), headers=self._headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
+
+    def get_version_info(self) -> Dict[str, Any]:
+        resp = httpx.get(self._url("/meta/version"), timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_admin_version_policy(self) -> Dict[str, Any]:
+        resp = httpx.get(self._url("/admin/version-policy"), headers=self._headers(), timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+
+    def update_admin_version_policy(
+        self,
+        min_client_version: str,
+        latest_client_version: str,
+        download_url: str,
+        hard_block: bool,
+    ) -> Dict[str, Any]:
+        resp = httpx.patch(
+            self._url("/admin/version-policy"),
+            headers=self._headers(),
+            json={
+                "min_client_version": min_client_version,
+                "latest_client_version": latest_client_version,
+                "download_url": download_url,
+                "hard_block": hard_block,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json()

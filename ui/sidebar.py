@@ -58,6 +58,12 @@ class Sidebar(QtWidgets.QFrame):
 
         self._apply_size()
 
+    def toggle_sidebar(self):
+        self._toggle()
+
+    def is_expanded(self) -> bool:
+        return self._expanded
+
     def set_items(self, items):
         for btn in self._buttons.values():
             self.nav_container.removeWidget(btn)

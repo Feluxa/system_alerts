@@ -5,7 +5,7 @@ class AlertPage(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.title = QtWidgets.QLabel("Panic Alert BETA")
+        self.title = QtWidgets.QLabel("Panic Alert  2.0")
         self.title.setObjectName("sectionTitle")
         self.hotkey_label = QtWidgets.QLabel("Hotkey: not set")
         self.hotkey_label.setObjectName("statusLabel")

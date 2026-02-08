@@ -18,6 +18,7 @@ def load_settings():
             "sound_path": "",
             "system_sound": "Siren",
             "volume": 70,
+            "auto_start": False,
         }
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -28,6 +29,7 @@ def load_settings():
             "sound_path": data.get("sound_path", ""),
             "system_sound": data.get("system_sound", "Siren"),
             "volume": int(data.get("volume", 70)),
+            "auto_start": bool(data.get("auto_start", False)),
         }
     except Exception:
         return {
@@ -36,10 +38,11 @@ def load_settings():
             "sound_path": "",
             "system_sound": "Siren",
             "volume": 70,
+            "auto_start": False,
         }
 
 
-def save_settings(theme, hotkey, sound_path, system_sound, volume):
+def save_settings(theme, hotkey, sound_path, system_sound, volume, auto_start=False):
     path = _settings_path()
     data = {
         "theme": theme or "dark",
@@ -47,6 +50,7 @@ def save_settings(theme, hotkey, sound_path, system_sound, volume):
         "sound_path": sound_path or "",
         "system_sound": system_sound or "Siren",
         "volume": int(volume),
+        "auto_start": bool(auto_start),
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

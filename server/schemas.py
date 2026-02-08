@@ -86,3 +86,17 @@ class PanicMessage(BaseModel):
     event_id: str
     ts: int
     text: Optional[str] = None
+
+
+class VersionInfoResponse(BaseModel):
+    min_client_version: str
+    latest_client_version: str
+    download_url: str
+    hard_block: bool = True
+
+
+class VersionPolicyUpdateRequest(BaseModel):
+    min_client_version: Optional[str] = None
+    latest_client_version: Optional[str] = None
+    download_url: Optional[str] = None
+    hard_block: Optional[bool] = None

@@ -2,10 +2,12 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class LoginDialog(QtWidgets.QDialog):
-    def __init__(self, api_client, app_icon=None, parent=None):
+    def __init__(self, api_client, app_icon=None, profiles=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.user = None
+        self.remember_login = True
+        self._profiles = profiles or []
 
         self.setWindowTitle("Sign in")
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint | QtCore.Qt.Dialog)
@@ -68,9 +70,23 @@ class LoginDialog(QtWidgets.QDialog):
         self.login_show_pw.clicked.connect(self._toggle_login_password)
         self.login_btn = QtWidgets.QPushButton("Continue")
         self.login_btn.setObjectName("primaryButton")
+        self.remember_box = QtWidgets.QCheckBox("Remember this profile")
+        self.remember_box.setChecked(True)
         self.login_status = QtWidgets.QLabel("")
         self.login_status.setObjectName("statusLabel")
         self.login_status.setWordWrap(True)
+        self.saved_profiles = QtWidgets.QComboBox()
+        self.saved_profiles.setVisible(False)
+        self.saved_sign_in_btn = QtWidgets.QPushButton("Use saved profile")
+        self.saved_sign_in_btn.setObjectName("ghostButton")
+        self.saved_sign_in_btn.clicked.connect(self._use_saved_profile)
+        self.saved_sign_in_btn.setVisible(False)
+
+        if self._profiles:
+            self.saved_profiles.setVisible(True)
+            self.saved_sign_in_btn.setVisible(True)
+            for profile in self._profiles:
+                self.saved_profiles.addItem(profile.get("username", ""), profile)
 
         self.login_btn.clicked.connect(self._do_login)
 
@@ -81,6 +97,11 @@ class LoginDialog(QtWidgets.QDialog):
         login_pw_row.addWidget(self.login_password)
         login_pw_row.addWidget(self.login_show_pw)
         layout.addLayout(login_pw_row)
+        saved_row = QtWidgets.QHBoxLayout()
+        saved_row.addWidget(self.saved_profiles)
+        saved_row.addWidget(self.saved_sign_in_btn)
+        layout.addLayout(saved_row)
+        layout.addWidget(self.remember_box)
         layout.addWidget(self.login_btn)
         layout.addWidget(self.login_status)
         layout.addStretch(1)
@@ -173,6 +194,36 @@ class LoginDialog(QtWidgets.QDialog):
             "username": user.get("username"),
             "role": user.get("role"),
         }
+        self.remember_login = self.remember_box.isChecked()
+        self.accept()
+
+    def _use_saved_profile(self):
+        if self.saved_profiles.count() == 0:
+            return
+        profile = self.saved_profiles.currentData()
+        if not isinstance(profile, dict):
+            return
+        token = profile.get("token")
+        if not token:
+            self.login_status.setText("Saved profile has no token.")
+            return
+        prev_base = self.api_client.base_url
+        prev_token = self.api_client.token
+        self.api_client.base_url = profile.get("base_url") or self.api_client.base_url
+        self.api_client.token = token
+        try:
+            self.api_client.my_team()
+        except Exception:
+            self.api_client.base_url = prev_base
+            self.api_client.token = prev_token
+            self.login_status.setText("Saved session expired. Sign in with password.")
+            return
+        self.user = {
+            "id": profile.get("user_id"),
+            "username": profile.get("username"),
+            "role": profile.get("role", "user"),
+        }
+        self.remember_login = True
         self.accept()
 
     def _toggle_login_password(self):
